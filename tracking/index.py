@@ -5,15 +5,16 @@ import sys
 import copy
 import time
 import argparse
+import os
 
 import cv2 as cv
 
 
 # 動画の読み込み
-def get_args():
+def get_args(movie):
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--device", default="../data_input/_3049141636.avi")
+    parser.add_argument("--device", default=movie)
     parser.add_argument("--width", help='cap width', type=int, default=960)
     parser.add_argument("--height", help='cap height', type=int, default=540)
 
@@ -51,83 +52,90 @@ def main():
         [255, 0, 0],  # blue
     ]
 
-    # 引数解析 #################################################################
-    args = get_args()
+    INPUT_DIR = '../data_input/'
+    video_files = []
+    for file in os.listdir(INPUT_DIR):
+        if file.endswith('.avi') or file.endswith('.mp4'):
+            video_files.append(file)
+    
+    for video_file in video_files:
+        # 引数解析 #################################################################
 
-    cap_device = args.device
-    cap_width = args.width
-    cap_height = args.height
+        args = get_args(INPUT_DIR + video_file)
+
+        cap_device = args.device
+        cap_width = args.width
+        cap_height = args.height
 
 
-    # カメラ準備 ###############################################################
-    if isint(cap_device):
-        cap_device = int(cap_device)
-    cap = cv.VideoCapture(cap_device)
-    cap.set(cv.CAP_PROP_FRAME_WIDTH, cap_width)
-    cap.set(cv.CAP_PROP_FRAME_HEIGHT, cap_height)
+        # カメラ準備 ###############################################################
+        if isint(cap_device):
+            cap_device = int(cap_device)
+        cap = cv.VideoCapture(cap_device)
+        cap.set(cv.CAP_PROP_FRAME_WIDTH, cap_width)
+        cap.set(cv.CAP_PROP_FRAME_HEIGHT, cap_height)
 
-    # Tracker初期化 ############################################################
-    window_name = 'shinnkinn_tracker'
-    cv.namedWindow(window_name)
+        # Tracker初期化 ############################################################
+        cv.namedWindow(video_file)
 
-    ret, image = cap.read()
-    if not ret:
-        sys.exit("Can't read first frame")
-    tracker = initialize_tracker(window_name, image)
-
-    x_list = []
-
-    while cap.isOpened():
         ret, image = cap.read()
         if not ret:
-            break
-        debug_image = copy.deepcopy(image)
+            sys.exit("Can't read first frame")
+        tracker = initialize_tracker(video_file, image)
 
-        # 追跡アップデート
-        start_time = time.time()
-        ok, bbox = tracker.update(image)
-        elapsed_time = time.time() - start_time
-        if ok:
-            # 追跡後のバウンディングボックス描画
-            cv.rectangle(debug_image, bbox, color_list[0], thickness=2)
+        x_list = []
 
-        # 各アルゴリズム処理時間描画
-        cv.putText(
-            debug_image,
-            'DaSiamRPN' + " : " + '{:.1f}'.format(elapsed_time * 1000) + "ms",
-            (10, 25), cv.FONT_HERSHEY_SIMPLEX, 0.7, color_list[0], 2,
-            cv.LINE_AA)
-        
-        # 中心座標描画
-        x = int(bbox[0] + bbox[2] / 2) 
-        y = int(bbox[1] + bbox[3] / 2)
-        center = (x, y)
+        while cap.isOpened():
+            ret, image = cap.read()
+            if not ret:
+                break
+            debug_image = copy.deepcopy(image)
 
-        x_list.append(x)
-        
-        cv.circle(debug_image, center, 3, color_list[0], thickness=-1)
-        cv.putText(
-            debug_image,
-            'center' + " : " + str(center),
-            (10, 50), cv.FONT_HERSHEY_SIMPLEX, 0.7, color_list[0], 2,
-            cv.LINE_AA)
-        
-        # csvに変位の保存
-        with open('center.csv', 'a') as f:
-            f.write(str(x) + ',' + str(y) + '\n')
+            # 追跡アップデート
+            start_time = time.time()
+            ok, bbox = tracker.update(image)
+            elapsed_time = time.time() - start_time
+            if ok:
+                # 追跡後のバウンディングボックス描画
+                cv.rectangle(debug_image, bbox, color_list[0], thickness=2)
 
-        cv.imshow(window_name, debug_image)
+            # 各アルゴリズム処理時間描画
+            cv.putText(
+                debug_image,
+                'DaSiamRPN' + " : " + '{:.1f}'.format(elapsed_time * 1000) + "ms",
+                (10, 25), cv.FONT_HERSHEY_SIMPLEX, 0.7, color_list[0], 2,
+                cv.LINE_AA)
+            
+            # 中心座標描画
+            x = int(bbox[0] + bbox[2] / 2) 
+            y = int(bbox[1] + bbox[3] / 2)
+            center = (x, y)
 
-        k = cv.waitKey(1)
-        if k == 32:  # SPACE
-            # 追跡対象再指定
-            tracker = initialize_tracker(window_name, image)
-        if k == 27:  # ESC
-            break
+            x_list.append(x)
+            
+            cv.circle(debug_image, center, 3, color_list[0], thickness=-1)
+            cv.putText(
+                debug_image,
+                'center' + " : " + str(center),
+                (10, 50), cv.FONT_HERSHEY_SIMPLEX, 0.7, color_list[0], 2,
+                cv.LINE_AA)
+            
+            # csvに変位の保存
+            with open(f'../data_output/{video_file}.csv', 'a') as f:
+                f.write(str(x) + ',' + str(y) + '\n')
 
-    min_x = min(x_list)
-    filtered_x_list = [x - min_x for x in x_list]
-    print(filtered_x_list)
+            cv.imshow(video_file, debug_image)
+
+            k = cv.waitKey(1)
+            if k == 32:  # SPACE
+                # 追跡対象再指定
+                tracker = initialize_tracker(video_file, image)
+            if k == 27:  # ESC
+                break
+
+        min_x = min(x_list)
+        filtered_x_list = [x - min_x for x in x_list]
+        print(filtered_x_list)
 
 if __name__ == '__main__':
     main()
