@@ -9,6 +9,8 @@ import os
 
 import cv2 as cv
 
+WIDTH = 1031.6 # [µm]
+HEIGHT = 547.08 # [µm]
 
 # 動画の読み込み
 def get_args(movie):
@@ -84,6 +86,8 @@ def main():
         tracker = initialize_tracker(video_file, image)
 
         x_list = []
+        y_list = []
+        time_list = []
 
         while cap.isOpened():
             ret, image = cap.read()
@@ -92,19 +96,10 @@ def main():
             debug_image = copy.deepcopy(image)
 
             # 追跡アップデート
-            start_time = time.time()
             ok, bbox = tracker.update(image)
-            elapsed_time = time.time() - start_time
             if ok:
                 # 追跡後のバウンディングボックス描画
                 cv.rectangle(debug_image, bbox, color_list[0], thickness=2)
-
-            # 各アルゴリズム処理時間描画
-            cv.putText(
-                debug_image,
-                'DaSiamRPN' + " : " + '{:.1f}'.format(elapsed_time * 1000) + "ms",
-                (10, 25), cv.FONT_HERSHEY_SIMPLEX, 0.7, color_list[0], 2,
-                cv.LINE_AA)
             
             # 中心座標描画
             x = int(bbox[0] + bbox[2] / 2) 
@@ -112,6 +107,8 @@ def main():
             center = (x, y)
 
             x_list.append(x)
+            y_list.append(y)
+            time_list.append(cap.get(cv.CAP_PROP_POS_MSEC)) # [ms]
             
             cv.circle(debug_image, center, 3, color_list[0], thickness=-1)
             cv.putText(
@@ -119,10 +116,6 @@ def main():
                 'center' + " : " + str(center),
                 (10, 50), cv.FONT_HERSHEY_SIMPLEX, 0.7, color_list[0], 2,
                 cv.LINE_AA)
-            
-            # csvに変位の保存
-            with open(f'../data_output/{video_file}.csv', 'a') as f:
-                f.write(str(x) + ',' + str(y) + '\n')
 
             cv.imshow(video_file, debug_image)
 
@@ -134,8 +127,16 @@ def main():
                 break
 
         min_x = min(x_list)
-        filtered_x_list = [x - min_x for x in x_list]
-        print(filtered_x_list)
+        min_y = min(y_list)
+        filtered_x_list = [WIDTH * (x - min_x) / cap_width for x in x_list]
+        filtered_y_list = [HEIGHT * (y - min_y) / cap_height for y in y_list]
+
+        # csvに変位の保存
+        with open(f'../data_output/{video_file}.csv', 'a') as f:
+            f.write('t(ms),x(µm),y(µm)\n')
+            for t, x, y in zip(time_list, filtered_x_list, filtered_y_list):
+                f.write(f'{t},{x},{y}\n')
+
 
 if __name__ == '__main__':
     main()
