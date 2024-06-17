@@ -13,11 +13,10 @@ def process_file(file_path):
     x_list = data.iloc[:, 1].values
     y_list = data.iloc[:, 2].values
 
-    print(t_list)
-    print(x_list)
+    power_list = [ x * 2 for x in x_list]
 
     # グラフ描画
-    plt.plot(t_list, x_list)
+    plt.plot(t_list, power_list)
     plt.show()
 
     # Beats per minute
@@ -25,10 +24,34 @@ def process_file(file_path):
     t_list_10sec = t_list[t_list <= ten_sec]
     x_list_10sec = x_list[:len(t_list_10sec)]
     x_smoothed = moving_average(x_list_10sec, 10)
-    threshold = 5
-    peaks, _ = find_peaks(x_smoothed, height=threshold)
+    peaks, _ = find_peaks(x_smoothed)
+    print('Peaks:', peaks)
     beats_per_minute = len(peaks) * 6
     print('Beats per minute:', beats_per_minute)
+
+    # contraction time to peak
+    x_smoothed_inv = -x_smoothed
+    valleys, _ = find_peaks(x_smoothed_inv)
+    print('Valleys:', valleys)
+    contractions = []
+    for peak in peaks:
+        for valley in valleys:
+            if peak > valley:
+                contractions.append(peak - valley)
+                break
+    contraction_time_to_peak = np.mean(contractions)
+    print('Contraction time to peak:', contraction_time_to_peak)
+
+    # contraction relaxation time
+    relaxation_times = []
+    for peak in peaks:
+        for valley in valleys:
+            if valley > peak:
+                relaxation_times.append(valley - peak)
+                break
+    contraction_relaxation_time = np.mean(relaxation_times)
+    print('Contraction relaxation time:', contraction_relaxation_time)
+    
 
 def main():
     OUTPUT_DIR = '../data_output'
