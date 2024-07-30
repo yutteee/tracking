@@ -132,7 +132,7 @@ def main():
         filtered_y_list = [HEIGHT * (y - min_y) / cap_height for y in y_list]
 
         # csvに変位の保存
-        with open(f'../data_output/{video_file}.csv', 'a') as f:
+        with open(f'../data_output/{video_file}.csv', 'a', encoding="" ) as f:
             f.write('t(ms),x(µm),y(µm)\n')
             for t, x, y in zip(time_list, filtered_x_list, filtered_y_list):
                 f.write(f'{t},{x},{y}\n')
